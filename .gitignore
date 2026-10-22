@@ -37,3 +37,6 @@ Thumbs.db
 
 # Private design/planning notes (not part of the submission)
 docs/superpowers/
+
+# Personal testing scripts
+scripts/
