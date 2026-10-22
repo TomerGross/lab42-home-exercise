@@ -33,6 +33,7 @@ def test_accepts_ips_and_hostnames(host):
         "a..b",
         "256.1.1.1",
         "a" * 64 + ".com",
+        ".".join(["a" * 63] * 4),
     ],
 )
 def test_rejects_malformed_hosts(host):

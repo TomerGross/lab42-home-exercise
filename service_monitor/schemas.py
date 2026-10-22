@@ -7,7 +7,12 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-HOSTNAME_LABEL = re.compile(r"(?!-)[a-z0-9-]{1,63}(?<!-)")
+MAX_SERVICE_NAME_LENGTH = 100  # our own limit
+MAX_HOSTNAME_LENGTH = 253  # DNS limit for a full hostname (RFC 1035)
+MAX_HOSTNAME_LABEL_LENGTH = 63  # DNS limit for each dot-separated label (RFC 1035)
+MAX_PORT = 65535  # TCP ports are 16-bit numbers
+
+HOSTNAME_LABEL = re.compile(rf"(?!-)[a-z0-9-]{{1,{MAX_HOSTNAME_LABEL_LENGTH}}}(?<!-)")
 
 
 class HealthStatus(StrEnum):
@@ -29,9 +34,9 @@ class ServiceConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    name: str = Field(min_length=1, max_length=100, pattern=r"^[^/]+$")
-    host: str = Field(min_length=1, max_length=253)
-    port: int = Field(ge=1, le=65535, strict=True)
+    name: str = Field(min_length=1, max_length=MAX_SERVICE_NAME_LENGTH, pattern=r"^[^/]+$")
+    host: str = Field(min_length=1, max_length=MAX_HOSTNAME_LENGTH)
+    port: int = Field(ge=1, le=MAX_PORT, strict=True)
 
     @field_validator("host")
     @classmethod
