@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 
 import pytest
@@ -152,3 +153,52 @@ async def test_check_services_runs_checks_concurrently_up_to_the_limit(database)
 
     assert checker.max_running == 2
     assert len(checker.checked_names) == 5
+
+
+@asynccontextmanager
+async def monitoring(manager: ServiceManager):
+    task = asyncio.create_task(manager.monitor_services(interval_seconds=0.01))
+    yield
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+async def wait_until(condition) -> None:
+    async with asyncio.timeout(1):
+        while not condition():
+            await asyncio.sleep(0.01)
+
+
+async def test_monitor_services_checks_every_service_each_round(manager, checker):
+    await manager.add_services([SERVICE_A, SERVICE_B])
+
+    async with monitoring(manager):
+        await wait_until(lambda: checker.checked_names.count("Service B") >= 2)
+
+    assert checker.checked_names.count("Service A") >= 2
+
+
+class FailingOnceChecker(FakeChecker):
+    """Raises on its first call, like an unexpected bug, then works normally."""
+
+    def __init__(self):
+        super().__init__()
+        self.failed = False
+
+    async def check(self, service: ServiceConfig) -> ServiceStatus:
+        if not self.failed:
+            self.failed = True
+            raise RuntimeError("unexpected failure")
+        return await super().check(service)
+
+
+async def test_monitor_services_keeps_running_after_a_failed_round(database):
+    checker = FailingOnceChecker()
+    manager = ServiceManager(database, checker)
+    await manager.add_services([SERVICE_A])
+
+    async with monitoring(manager):
+        await wait_until(lambda: checker.checked_names == ["Service A"])
+
+    assert checker.failed

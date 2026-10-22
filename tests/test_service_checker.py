@@ -8,6 +8,8 @@ from service_monitor.schemas import FailureReason, HealthStatus, ServiceConfig
 from service_monitor.service_checker import ServiceChecker, TcpServiceChecker
 from tests.helpers import closed_port
 
+TIMEOUT_SECONDS = 1.0
+
 
 def make_config(port: int, host: str = "127.0.0.1") -> ServiceConfig:
     return ServiceConfig(name="Service A", host=host, port=port)
@@ -22,13 +24,13 @@ async def listening_port():
 
 
 def test_tcp_checker_implements_the_checker_contract():
-    assert isinstance(TcpServiceChecker(), ServiceChecker)
+    assert isinstance(TcpServiceChecker(TIMEOUT_SECONDS), ServiceChecker)
     with pytest.raises(TypeError):
         ServiceChecker()
 
 
 async def test_open_port_is_up(listening_port):
-    status = await TcpServiceChecker().check(make_config(listening_port))
+    status = await TcpServiceChecker(TIMEOUT_SECONDS).check(make_config(listening_port))
 
     assert status.status == HealthStatus.UP
     assert status.response_time_ms >= 0
@@ -36,7 +38,7 @@ async def test_open_port_is_up(listening_port):
 
 
 async def test_last_checked_is_utc_in_whole_seconds(listening_port):
-    status = await TcpServiceChecker().check(make_config(listening_port))
+    status = await TcpServiceChecker(TIMEOUT_SECONDS).check(make_config(listening_port))
 
     assert status.last_checked.utcoffset().total_seconds() == 0
     assert status.last_checked.microsecond == 0
@@ -79,7 +81,7 @@ async def test_connection_errors_are_classified(monkeypatch, error, reason):
 
     monkeypatch.setattr(asyncio, "open_connection", fail)
 
-    status = await TcpServiceChecker().check(make_config(8001, host="example.com"))
+    status = await TcpServiceChecker(TIMEOUT_SECONDS).check(make_config(8001, host="example.com"))
 
     assert status.status == HealthStatus.DOWN
     assert status.failure_reason == reason

@@ -1,11 +1,14 @@
-"""Business logic for every operation the API offers. Knows nothing about HTTP or SQL."""
+"""Business logic for every operation the API offers, plus background monitoring. Knows nothing about HTTP or SQL."""
 
 import asyncio
+import logging
 
 from service_monitor.database import Database
 from service_monitor.errors import UnknownServiceError
 from service_monitor.schemas import Service, ServiceConfig
 from service_monitor.service_checker import ServiceChecker
+
+logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_CHECKS = 100  # caps open sockets, so a long service list cannot exhaust the OS file-descriptor limit
 
@@ -46,6 +49,15 @@ class ServiceManager:
         """Probe the named services (every service when no names are given) concurrently and store each result."""
         services = await self.list_services(names)
         return await asyncio.gather(*(self._check_and_store(service) for service in services))
+
+    async def monitor_services(self, interval_seconds: float) -> None:
+        """Check every service every interval_seconds, until cancelled."""
+        while True:
+            await asyncio.sleep(interval_seconds)
+            try:
+                await self.check_services()
+            except Exception:
+                logger.exception("Monitoring round failed")
 
     async def delete_service(self, name: str) -> None:
         await self._database.delete_service(name)

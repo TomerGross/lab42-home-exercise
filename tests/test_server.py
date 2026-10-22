@@ -1,8 +1,10 @@
 import socket
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 
+from service_monitor.config import Settings
 from service_monitor.server import create_app, get_manager
 from tests.conftest import sqlite_url
 from tests.helpers import closed_port
@@ -14,7 +16,7 @@ PAYLOAD = {"services": [SERVICE_A, SERVICE_B]}
 
 @pytest.fixture
 def client(tmp_path):
-    app = create_app(sqlite_url(tmp_path / "api.db"), check_timeout_seconds=0.5)
+    app = create_app(Settings(database_url=sqlite_url(tmp_path / "api.db"), check_timeout_seconds=0.5))
     with TestClient(app) as client:
         yield client
 
@@ -188,7 +190,7 @@ def test_unexpected_error_returns_500_and_server_keeps_running(tmp_path):
     def broken_manager():
         raise RuntimeError("boom")
 
-    app = create_app(sqlite_url(tmp_path / "api.db"))
+    app = create_app(Settings(database_url=sqlite_url(tmp_path / "api.db")))
     app.dependency_overrides[get_manager] = broken_manager
     with TestClient(app, raise_server_exceptions=False) as client:
         response = client.get("/services")
@@ -199,10 +201,24 @@ def test_unexpected_error_returns_500_and_server_keeps_running(tmp_path):
         assert client.get("/services").status_code == 200
 
 
+def test_background_monitoring_updates_status_without_a_request(tmp_path):
+    app = create_app(Settings(database_url=sqlite_url(tmp_path / "api.db"), monitor_interval_seconds=0.05))
+    with socket.socket() as listener, TestClient(app) as client:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        add_service(client, "Live", listener.getsockname()[1])
+
+        deadline = time.monotonic() + 2
+        while client.get("/services/Live").json()["status"] != "UP" and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+        assert client.get("/services/Live").json()["status"] == "UP"
+
+
 def test_data_survives_an_app_restart(tmp_path):
     url = sqlite_url(tmp_path / "restart.db")
-    with TestClient(create_app(url)) as client:
+    with TestClient(create_app(Settings(database_url=url))) as client:
         client.post("/services", json=PAYLOAD)
 
-    with TestClient(create_app(url)) as client:
+    with TestClient(create_app(Settings(database_url=url))) as client:
         assert len(client.get("/services").json()) == 2

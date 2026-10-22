@@ -1,7 +1,7 @@
 """HTTP layer: the FastAPI app, its endpoints and error responses. The only module that knows about HTTP."""
 
-import os
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from http import HTTPStatus
 from typing import Annotated
 
@@ -10,13 +10,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from service_monitor.config import Settings
 from service_monitor.database import Database
 from service_monitor.errors import ServiceMonitorError
 from service_monitor.schemas import Service, ServiceConfig
-from service_monitor.service_checker import DEFAULT_TIMEOUT_SECONDS, TcpServiceChecker
+from service_monitor.service_checker import TcpServiceChecker
 from service_monitor.service_manager import ServiceManager
-
-DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./services.db"
 
 
 def get_manager(request: Request) -> ServiceManager:
@@ -97,17 +96,20 @@ def error_response(status_code: HTTPStatus, code: str, detail: str | list) -> JS
 # --- App ---
 
 
-def create_app(database_url: str | None = None, check_timeout_seconds: float | None = None) -> FastAPI:
-    database_url = database_url or os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
-    if check_timeout_seconds is None:
-        check_timeout_seconds = float(os.getenv("CHECK_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or Settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        database = Database(database_url)
+        database = Database(settings.database_url)
         await database.create_tables()
-        app.state.manager = ServiceManager(database, TcpServiceChecker(check_timeout_seconds))
+        manager = ServiceManager(database, TcpServiceChecker(settings.check_timeout_seconds))
+        app.state.manager = manager
+        monitoring = asyncio.create_task(manager.monitor_services(settings.monitor_interval_seconds))
         yield
+        monitoring.cancel()
+        with suppress(asyncio.CancelledError):  # a cancelled task ends by raising this
+            await monitoring
         await database.close()
 
     app = FastAPI(
