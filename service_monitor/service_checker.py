@@ -12,6 +12,8 @@ from service_monitor.schemas import FailureReason, HealthStatus, ServiceConfig, 
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_TIMEOUT_SECONDS = 3.0
+
 # Linux/macOS errno values, plus the Windows codes for the same errors (WSAENETUNREACH, WSAEHOSTUNREACH).
 UNREACHABLE_ERRNOS = {errno.ENETUNREACH, errno.EHOSTUNREACH, 10051, 10065}
 
@@ -25,7 +27,7 @@ class ServiceChecker(ABC):
 class TcpServiceChecker(ServiceChecker):
     """A service is UP when a TCP connection to its host and port opens within the timeout."""
 
-    def __init__(self, timeout_seconds: float = 3.0):
+    def __init__(self, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS):
         self.timeout_seconds = timeout_seconds
 
     async def check(self, service: ServiceConfig) -> ServiceStatus:
