@@ -61,9 +61,13 @@ class Database:
             raise DuplicateServiceError("a service with this name or host:port already exists") from error
         return [_to_service(record) for record in records]
 
-    async def list_services(self) -> list[Service]:
+    async def list_services(self, names: list[str] | None = None) -> list[Service]:
+        """All services, or only those with the given names. Names are bound parameters, never SQL text."""
+        query = select(ServiceRecord).order_by(ServiceRecord.name)
+        if names is not None:
+            query = query.where(ServiceRecord.name.in_(names))
         async with self._session_factory() as session:
-            records = await session.scalars(select(ServiceRecord).order_by(ServiceRecord.name))
+            records = await session.scalars(query)
             return [_to_service(record) for record in records]
 
     async def get_service(self, name: str) -> Service | None:

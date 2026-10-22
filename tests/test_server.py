@@ -121,6 +121,47 @@ def test_check_reachable_service_is_up(client):
     assert service["last_checked"].endswith("Z")
 
 
+def test_check_services_returns_each_named_service_with_its_status(client):
+    add_service(client, "Other", 9000)
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        add_service(client, "Live", listener.getsockname()[1])
+        add_service(client, "Dead", closed_port())
+
+        response = client.post("/services/check", json={"names": ["Live", "Dead"]})
+
+    assert response.status_code == 200
+    assert [(service["name"], service["status"]) for service in response.json()] == [("Dead", "DOWN"), ("Live", "UP")]
+
+
+def test_check_services_without_body_checks_every_service(client):
+    add_service(client, "Dead", closed_port())
+
+    response = client.post("/services/check")
+
+    assert response.status_code == 200
+    assert [service["status"] for service in response.json()] == ["DOWN"]
+
+
+@pytest.mark.parametrize("name", ["missing", "' OR '1'='1"])
+def test_check_services_with_unknown_name_returns_404(client, name):
+    client.post("/services", json=PAYLOAD)
+
+    response = client.post("/services/check", json={"names": ["Service A", name]})
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "unknown_service"
+    assert [service["status"] for service in client.get("/services").json()] == ["UNKNOWN", "UNKNOWN"]
+
+
+def test_check_services_with_empty_names_returns_422(client):
+    response = client.post("/services/check", json={"names": []})
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "invalid_request"
+
+
 def test_check_unreachable_service_is_down_but_returns_200(client):
     add_service(client, "Dead", closed_port())
 

@@ -47,6 +47,13 @@ async def get_service(name: str, manager: Manager) -> Service:
     return await manager.get_service(name)
 
 
+@router.post("/services/check")
+async def check_services(
+    manager: Manager, names: Annotated[list[str] | None, Body(embed=True, min_length=1)] = None
+) -> list[Service]:
+    return await manager.check_services(names)
+
+
 @router.post("/services/{name}/check")
 async def check_service(name: str, manager: Manager) -> Service:
     return await manager.check_service(name)

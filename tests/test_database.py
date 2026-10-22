@@ -28,6 +28,23 @@ async def test_list_services_is_sorted_by_name(database):
     assert names == ["Service A", "Service B"]
 
 
+async def test_list_services_filtered_by_names(database):
+    await database.add_services([SERVICE_A, SERVICE_B])
+
+    names = [service.name for service in await database.list_services(["Service B", "missing"])]
+
+    assert names == ["Service B"]
+
+
+@pytest.mark.parametrize("injection", ["' OR '1'='1", "Service A'); DROP TABLE services; --"])
+async def test_names_are_never_executed_as_sql(database, injection):
+    await database.add_services([SERVICE_A, ServiceConfig(name=injection, host="10.0.0.1", port=1)])
+
+    assert [service.name for service in await database.list_services([injection])] == [injection]
+    assert (await database.get_service(injection)).name == injection
+    assert len(await database.list_services()) == 2
+
+
 async def test_added_service_starts_unknown(database):
     [saved] = await database.add_services([SERVICE_A])
 
