@@ -52,6 +52,11 @@ async def check_service(name: str, manager: Manager) -> Service:
     return await manager.check_service(name)
 
 
+@router.delete("/services/{name}", status_code=HTTPStatus.NO_CONTENT)
+async def delete_service(name: str, manager: Manager) -> None:
+    await manager.delete_service(name)
+
+
 # --- Error handlers: every error becomes {"error": <code>, "detail": <message or list>} ---
 
 

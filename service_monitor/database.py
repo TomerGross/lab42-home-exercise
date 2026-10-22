@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import String, UniqueConstraint, select
+from sqlalchemy import String, UniqueConstraint, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -80,6 +80,12 @@ class Database:
             for field, value in status.model_dump().items():
                 setattr(record, field, value)
         return _to_service(record)
+
+    async def delete_service(self, name: str) -> None:
+        async with self._session_factory.begin() as session:
+            result = await session.execute(delete(ServiceRecord).where(ServiceRecord.name == name))
+            if result.rowcount == 0:
+                raise UnknownServiceError(name)
 
 
 def _to_service(record: ServiceRecord) -> Service:

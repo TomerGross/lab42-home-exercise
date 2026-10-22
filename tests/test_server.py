@@ -50,12 +50,25 @@ def test_get_service_with_space_in_name(client):
     assert response.json()["port"] == 8001
 
 
-@pytest.mark.parametrize(("method", "path"), [("get", "/services/missing"), ("post", "/services/missing/check")])
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("get", "/services/missing"), ("post", "/services/missing/check"), ("delete", "/services/missing")],
+)
 def test_unknown_service_returns_404(client, method, path):
     response = client.request(method, path)
 
     assert response.status_code == 404
     assert response.json()["error"] == "unknown_service"
+
+
+def test_delete_service_returns_204_and_service_is_gone(client):
+    client.post("/services", json=PAYLOAD)
+
+    response = client.delete("/services/Service%20A")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert client.get("/services/Service%20A").status_code == 404
 
 
 def test_duplicate_returns_409_and_saves_nothing(client):

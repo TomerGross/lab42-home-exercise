@@ -84,6 +84,28 @@ async def test_update_status_of_unknown_service_raises(database):
         await database.update_status("missing", status)
 
 
+async def test_delete_service_removes_only_that_service(database):
+    await database.add_services([SERVICE_A, SERVICE_B])
+
+    await database.delete_service("Service A")
+
+    assert [service.name for service in await database.list_services()] == ["Service B"]
+
+
+async def test_delete_unknown_service_raises(database):
+    with pytest.raises(UnknownServiceError):
+        await database.delete_service("missing")
+
+
+async def test_deleted_service_can_be_added_again(database):
+    await database.add_services([SERVICE_A])
+    await database.delete_service("Service A")
+
+    [saved] = await database.add_services([SERVICE_A])
+
+    assert saved.name == "Service A"
+
+
 async def test_data_survives_a_restart(tmp_path):
     url = sqlite_url(tmp_path / "restart.db")
     first = Database(url)

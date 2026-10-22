@@ -55,6 +55,15 @@ async def test_get_unknown_service_raises(manager):
         await manager.get_service("missing")
 
 
+async def test_delete_service_removes_it(manager):
+    await manager.add_services([SERVICE_A])
+
+    await manager.delete_service("Service A")
+
+    with pytest.raises(UnknownServiceError):
+        await manager.get_service("Service A")
+
+
 async def test_check_service_stores_and_returns_the_new_status(manager, checker):
     await manager.add_services([SERVICE_A])
 

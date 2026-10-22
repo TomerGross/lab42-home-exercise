@@ -1,4 +1,4 @@
-"""Business logic for the assignment's four operations (§2.1–2.4)."""
+"""Business logic for the assignment's operations: the four required ones (§2.1–2.4) and the optional delete (§7)."""
 
 from service_monitor.database import Database
 from service_monitor.errors import UnknownServiceError
@@ -28,3 +28,6 @@ class ServiceManager:
         service = await self.get_service(name)
         status = await self._checker.check(service)
         return await self._database.update_status(name, status)
+
+    async def delete_service(self, name: str) -> None:
+        await self._database.delete_service(name)
