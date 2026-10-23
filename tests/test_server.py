@@ -1,4 +1,3 @@
-import socket
 import time
 
 import pytest
@@ -6,8 +5,7 @@ from fastapi.testclient import TestClient
 
 from service_monitor.config import Settings
 from service_monitor.server import create_app, get_manager
-from tests.conftest import sqlite_url
-from tests.helpers import closed_port
+from tests.helpers import closed_port, listening_port, sqlite_url
 
 SERVICE_A = {"name": "Service A", "host": "127.0.0.1", "port": 8001}
 SERVICE_B = {"name": "Service B", "host": "127.0.0.1", "port": 8002}
@@ -39,7 +37,14 @@ def test_list_services_returns_fields_in_assignment_order(client):
 
     assert [service["name"] for service in services] == ["Service A", "Service B"]
     assert list(services[0]) == [
-        "name", "host", "port", "check_type", "status", "last_checked", "response_time_ms", "failure_reason",
+        "name",
+        "host",
+        "port",
+        "check_type",
+        "status",
+        "last_checked",
+        "response_time_ms",
+        "failure_reason",
     ]
 
 
@@ -125,10 +130,8 @@ def test_malformed_json_returns_422(client):
 
 
 def test_check_reachable_service_is_up(client):
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        add_service(client, "Live", listener.getsockname()[1])
+    with listening_port() as port:
+        add_service(client, "Live", port)
 
         service = client.post("/services/Live/check").json()
 
@@ -139,10 +142,8 @@ def test_check_reachable_service_is_up(client):
 
 def test_check_services_returns_each_named_service_with_its_status(client):
     add_service(client, "Other", 9000)
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        add_service(client, "Live", listener.getsockname()[1])
+    with listening_port() as port:
+        add_service(client, "Live", port)
         add_service(client, "Dead", closed_port())
 
         response = client.post("/services/check", json={"names": ["Live", "Dead"]})
@@ -179,10 +180,8 @@ def test_check_services_with_empty_names_returns_422(client):
 
 
 def test_history_lists_checks_newest_first(client):
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        add_service(client, "Flaky", listener.getsockname()[1])
+    with listening_port() as port:
+        add_service(client, "Flaky", port)
         client.post("/services/Flaky/check")
     client.post("/services/Flaky/check")  # the listener is closed now
 
@@ -241,10 +240,8 @@ def test_unexpected_error_returns_500_and_server_keeps_running(tmp_path):
 
 def test_background_monitoring_updates_status_without_a_request(tmp_path):
     app = create_app(Settings(database_url=sqlite_url(tmp_path / "api.db"), monitor_interval_seconds=0.05))
-    with socket.socket() as listener, TestClient(app) as client:
-        listener.bind(("127.0.0.1", 0))
-        listener.listen()
-        add_service(client, "Live", listener.getsockname()[1])
+    with listening_port() as port, TestClient(app) as client:
+        add_service(client, "Live", port)
 
         deadline = time.monotonic() + 2
         while client.get("/services/Live").json()["status"] != "UP" and time.monotonic() < deadline:

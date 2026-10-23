@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 import pytest
 
 from service_monitor.schemas import CheckType, FailureReason, HealthStatus, ServiceConfig
-from service_monitor.service_checker import ServiceChecker, NetworkServiceChecker
+from service_monitor.service_checker import NetworkServiceChecker, ServiceChecker
 from tests.helpers import closed_port
 
 TIMEOUT_SECONDS = 1.0
@@ -42,30 +42,24 @@ async def fake_server(reply: bytes | None, wait_for_request: bool = False):
         await server.wait_closed()
 
 
-@pytest.fixture
-async def listening_port():
-    server = await asyncio.start_server(lambda reader, writer: writer.close(), "127.0.0.1", 0)
-    yield server.sockets[0].getsockname()[1]
-    server.close()
-    await server.wait_closed()
-
-
 def test_network_checker_implements_the_checker_contract():
     assert isinstance(NetworkServiceChecker(TIMEOUT_SECONDS), ServiceChecker)
     with pytest.raises(TypeError):
         ServiceChecker()
 
 
-async def test_open_port_is_up(listening_port):
-    status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(listening_port))
+async def test_open_port_is_up():
+    async with fake_server(b"") as port:
+        status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(port))
 
     assert status.status == HealthStatus.UP
     assert status.response_time_ms >= 0
     assert status.failure_reason is None
 
 
-async def test_last_checked_is_utc_in_whole_seconds(listening_port):
-    status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(listening_port))
+async def test_last_checked_is_utc_in_whole_seconds():
+    async with fake_server(b"") as port:
+        status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(port))
 
     assert status.last_checked.utcoffset().total_seconds() == 0
     assert status.last_checked.microsecond == 0
@@ -98,7 +92,6 @@ async def test_slow_connection_times_out(monkeypatch):
         (socket.gaierror(socket.EAI_NONAME, "Name or service not known"), FailureReason.DNS_ERROR),
         (OSError(errno.EHOSTUNREACH, "No route to host"), FailureReason.UNREACHABLE),
         (OSError(errno.ENETUNREACH, "Network is unreachable"), FailureReason.UNREACHABLE),
-        (OSError(10065, "A socket operation was attempted to an unreachable host"), FailureReason.UNREACHABLE),
         (OSError(errno.EACCES, "Permission denied"), FailureReason.OTHER),
     ],
 )

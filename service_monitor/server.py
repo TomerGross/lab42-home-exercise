@@ -1,4 +1,4 @@
-"""HTTP layer: the FastAPI app, its endpoints and error responses. The only module that knows about HTTP."""
+"""API layer: the FastAPI app, its endpoints and error responses. The only module that knows the web framework."""
 
 import asyncio
 from contextlib import asynccontextmanager, suppress
@@ -81,7 +81,7 @@ async def handle_service_monitor_error(request: Request, error: ServiceMonitorEr
 
 
 async def handle_invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
-    # loc looks like ("body", "services", 0, "port"); drop "body" to get "services.0.port".
+    # loc looks like ("body", "services", 0, "port") or ("query", "limit"); drop the location to get "services.0.port".
     problems = [
         {"field": ".".join(str(part) for part in problem["loc"][1:]), "message": problem["msg"]}
         for problem in error.errors()

@@ -6,7 +6,7 @@ import logging
 import socket
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx2
 
@@ -14,8 +14,7 @@ from service_monitor.schemas import CheckType, FailureReason, HealthStatus, Serv
 
 logger = logging.getLogger(__name__)
 
-# Linux/macOS errno values, plus the Windows codes for the same errors (WSAENETUNREACH, WSAEHOSTUNREACH).
-UNREACHABLE_ERRNOS = {errno.ENETUNREACH, errno.EHOSTUNREACH, 10051, 10065}
+UNREACHABLE_ERRNOS = {errno.ENETUNREACH, errno.EHOSTUNREACH}
 SSH_BANNER_PREFIX = b"SSH-"  # every SSH server greets with "SSH-<version>-..." (RFC 4253 §4.2)
 MAX_SSH_BANNER_LENGTH = 255  # RFC 4253 §4.2
 
@@ -38,7 +37,7 @@ class NetworkServiceChecker(ServiceChecker):
         self.timeout_seconds = timeout_seconds
 
     async def check(self, service: ServiceConfig) -> ServiceStatus:
-        checked_at = datetime.now(timezone.utc).replace(microsecond=0)
+        checked_at = datetime.now(UTC).replace(microsecond=0)
         start = time.perf_counter()
         try:
             async with asyncio.timeout(self.timeout_seconds):
@@ -80,10 +79,12 @@ async def _check_ssh(service: ServiceConfig) -> None:
 
 async def _check_http(service: ServiceConfig) -> None:
     url = httpx2.URL(scheme=service.check_type, host=service.host, port=service.port, path="/")
-    async with httpx2.AsyncClient(timeout=None) as client:  # asyncio.timeout bounds the whole check
-        async with client.stream("GET", url) as response:  # status and headers only, no body download
-            if response.is_server_error:
-                raise UnexpectedResponseError(f"HTTP {response.status_code}")
+    async with (
+        httpx2.AsyncClient(timeout=None) as client,  # asyncio.timeout bounds the whole check
+        client.stream("GET", url) as response,  # status and headers only, no body download
+    ):
+        if response.is_server_error:
+            raise UnexpectedResponseError(f"HTTP {response.status_code}")
 
 
 def _failure_reason(error: Exception) -> FailureReason:

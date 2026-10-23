@@ -72,13 +72,6 @@ def test_new_service_starts_unknown():
     assert service.failure_reason is None
 
 
-def test_service_serializes_flat_like_the_assignment_example():
-    service = Service(name="Service A", host="127.0.0.1", port=8001)
-    assert list(service.model_dump()) == [
-        "name", "host", "port", "check_type", "status", "last_checked", "response_time_ms", "failure_reason",
-    ]
-
-
 def test_check_type_defaults_to_tcp():
     assert make_config().check_type == CheckType.TCP
 

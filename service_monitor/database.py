@@ -1,7 +1,7 @@
 """Persistence: the services and checks tables and the Database that reads and writes them. The only module that
 knows SQL."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, delete, select
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +21,7 @@ from service_monitor.schemas import (
     ServiceStatus,
 )
 
+
 class Base(DeclarativeBase):
     pass
 
@@ -32,7 +33,7 @@ class UtcDateTime(TypeDecorator):
     cache_ok = True
 
     def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
-        return value.replace(tzinfo=timezone.utc) if value else None
+        return value.replace(tzinfo=UTC) if value else None
 
 
 class StatusColumns:
@@ -85,7 +86,7 @@ class Database:
             async with self._session_factory.begin() as session:
                 session.add_all(records)
         except IntegrityError as error:
-            raise DuplicateServiceError("a service with this name or host:port already exists") from error
+            raise DuplicateServiceError from error
         return [Service.model_validate(record) for record in records]
 
     async def list_services(self, names: list[str] | None = None) -> list[Service]:
@@ -108,9 +109,10 @@ class Database:
             record = await session.scalar(select(ServiceRecord).where(ServiceRecord.name == name))
             if record is None:
                 raise UnknownServiceError(name)
-            for field, value in status.model_dump().items():
+            values = status.model_dump()
+            for field, value in values.items():
                 setattr(record, field, value)
-            session.add(CheckRecord(service_id=record.id, **status.model_dump()))
+            session.add(CheckRecord(service_id=record.id, **values))
         return Service.model_validate(record)
 
     async def get_history(self, name: str, limit: int) -> list[ServiceStatus]:

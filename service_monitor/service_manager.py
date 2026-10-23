@@ -14,9 +14,7 @@ MAX_CONCURRENT_CHECKS = 100  # caps open sockets, so a long service list cannot 
 
 
 class ServiceManager:
-    def __init__(
-        self, database: Database, checker: ServiceChecker, max_concurrent_checks: int = MAX_CONCURRENT_CHECKS
-    ):
+    def __init__(self, database: Database, checker: ServiceChecker, max_concurrent_checks: int = MAX_CONCURRENT_CHECKS):
         self._database = database
         self._checker = checker
         self._check_slots = asyncio.Semaphore(max_concurrent_checks)
@@ -54,6 +52,9 @@ class ServiceManager:
         await self.get_service(name)  # raises UnknownServiceError for an unknown name
         return await self._database.get_history(name, limit)
 
+    async def delete_service(self, name: str) -> None:
+        await self._database.delete_service(name)
+
     async def monitor_services(self, interval_seconds: float) -> None:
         """Check every service every interval_seconds, until cancelled."""
         while True:
@@ -62,9 +63,6 @@ class ServiceManager:
                 await self.check_services()
             except Exception:
                 logger.exception("Monitoring round failed")
-
-    async def delete_service(self, name: str) -> None:
-        await self._database.delete_service(name)
 
     async def _check_and_store(self, service: Service) -> Service:
         """Probe one service and store the result. Waits for a free slot when the concurrency limit is reached."""

@@ -1,4 +1,4 @@
-"""Domain errors raised by the business logic. Each one declares how it is reported to the client."""
+"""Domain errors raised by the business logic and the database. Each one declares how it is reported to the client."""
 
 from http import HTTPStatus
 
@@ -22,5 +22,5 @@ class DuplicateServiceError(ServiceMonitorError):
     status_code = HTTPStatus.CONFLICT
     code = "duplicate_service"
 
-    def __init__(self, conflict: str):
-        super().__init__(f"Duplicate service: {conflict}")
+    def __init__(self):
+        super().__init__("A service with this name or host:port already exists")

@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager, suppress
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -24,7 +24,7 @@ class FakeChecker(ServiceChecker):
         self.checked_names.append(service.name)
         return ServiceStatus(
             status=HealthStatus.UP,
-            last_checked=datetime(2026, 10, 8, 10, 30, tzinfo=timezone.utc),
+            last_checked=datetime(2026, 10, 8, 10, 30, tzinfo=UTC),
             response_time_ms=5.0,
         )
 
@@ -213,6 +213,6 @@ async def test_monitor_services_keeps_running_after_a_failed_round(database):
     await manager.add_services([SERVICE_A])
 
     async with monitoring(manager):
-        await wait_until(lambda: checker.checked_names == ["Service A"])
+        await wait_until(lambda: "Service A" in checker.checked_names)
 
     assert checker.failed

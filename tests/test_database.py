@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from service_monitor.database import Database
 from service_monitor.errors import DuplicateServiceError, UnknownServiceError
 from service_monitor.schemas import CheckType, FailureReason, HealthStatus, ServiceConfig, ServiceStatus
-from tests.conftest import sqlite_url
+from tests.helpers import sqlite_url
 
 SERVICE_A = ServiceConfig(name="Service A", host="127.0.0.1", port=8001)
 SERVICE_B = ServiceConfig(name="Service B", host="127.0.0.1", port=8002)
@@ -86,10 +86,8 @@ async def test_duplicates_within_one_batch_are_rejected(database, duplicate):
 
 async def test_update_status_round_trips_in_utc(database):
     await database.add_services([SERVICE_A])
-    checked_at = datetime(2026, 10, 8, 10, 30, tzinfo=timezone.utc)
-    status = ServiceStatus(
-        status=HealthStatus.DOWN, last_checked=checked_at, failure_reason=FailureReason.TIMEOUT
-    )
+    checked_at = datetime(2026, 10, 8, 10, 30, tzinfo=UTC)
+    status = ServiceStatus(status=HealthStatus.DOWN, last_checked=checked_at, failure_reason=FailureReason.TIMEOUT)
 
     await database.update_status("Service A", status)
     stored = await database.get_service("Service A")
@@ -101,14 +99,14 @@ async def test_update_status_round_trips_in_utc(database):
 
 
 async def test_update_status_of_unknown_service_raises(database):
-    status = ServiceStatus(status=HealthStatus.UP, last_checked=datetime.now(timezone.utc))
+    status = ServiceStatus(status=HealthStatus.UP, last_checked=datetime.now(UTC))
 
     with pytest.raises(UnknownServiceError):
         await database.update_status("missing", status)
 
 
 def make_status(health: HealthStatus, minute: int) -> ServiceStatus:
-    return ServiceStatus(status=health, last_checked=datetime(2026, 10, 8, 10, minute, tzinfo=timezone.utc))
+    return ServiceStatus(status=health, last_checked=datetime(2026, 10, 8, 10, minute, tzinfo=UTC))
 
 
 async def test_update_status_adds_to_history_newest_first(database):
@@ -119,7 +117,7 @@ async def test_update_status_adds_to_history_newest_first(database):
     history = await database.get_history("Service A", limit=10)
 
     assert [status.status for status in history] == [HealthStatus.UP, HealthStatus.DOWN]
-    assert history[0].last_checked == datetime(2026, 10, 8, 10, 2, tzinfo=timezone.utc)
+    assert history[0].last_checked == datetime(2026, 10, 8, 10, 2, tzinfo=UTC)
 
 
 async def test_get_history_returns_at_most_limit_entries(database):

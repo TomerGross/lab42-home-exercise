@@ -6,8 +6,8 @@ from service_monitor.config import Settings
 
 @pytest.fixture(autouse=True)
 def clean_environment(monkeypatch):
-    for name in ("DATABASE_URL", "CHECK_TIMEOUT_SECONDS", "MONITOR_INTERVAL_SECONDS"):
-        monkeypatch.delenv(name, raising=False)
+    for field in Settings.model_fields:
+        monkeypatch.delenv(field.upper(), raising=False)
 
 
 def test_defaults():

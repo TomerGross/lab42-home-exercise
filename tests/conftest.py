@@ -1,10 +1,7 @@
 import pytest
 
 from service_monitor.database import Database
-
-
-def sqlite_url(path) -> str:
-    return f"sqlite+aiosqlite:///{path.as_posix()}"
+from tests.helpers import sqlite_url
 
 
 @pytest.fixture
