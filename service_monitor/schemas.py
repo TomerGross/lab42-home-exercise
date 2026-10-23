@@ -21,11 +21,19 @@ class HealthStatus(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class CheckType(StrEnum):
+    TCP = "tcp"
+    HTTP = "http"
+    HTTPS = "https"
+    SSH = "ssh"
+
+
 class FailureReason(StrEnum):
     TIMEOUT = "timeout"
     CONNECTION_REFUSED = "connection_refused"
     UNREACHABLE = "unreachable"
     DNS_ERROR = "dns_error"
+    UNEXPECTED_RESPONSE = "unexpected_response"
     OTHER = "other"
 
 
@@ -37,6 +45,7 @@ class ServiceConfig(BaseModel):
     name: str = Field(min_length=1, max_length=MAX_SERVICE_NAME_LENGTH, pattern=r"^[^/]+$")
     host: str = Field(min_length=1, max_length=MAX_HOSTNAME_LENGTH)
     port: int = Field(ge=1, le=MAX_PORT, strict=True)
+    check_type: CheckType = CheckType.TCP
 
     @field_validator("host")
     @classmethod

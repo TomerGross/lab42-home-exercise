@@ -4,7 +4,7 @@ import pytest
 
 from service_monitor.database import Database
 from service_monitor.errors import DuplicateServiceError, UnknownServiceError
-from service_monitor.schemas import FailureReason, HealthStatus, ServiceConfig, ServiceStatus
+from service_monitor.schemas import CheckType, FailureReason, HealthStatus, ServiceConfig, ServiceStatus
 from tests.conftest import sqlite_url
 
 SERVICE_A = ServiceConfig(name="Service A", host="127.0.0.1", port=8001)
@@ -51,6 +51,12 @@ async def test_added_service_starts_unknown(database):
     assert saved.name == "Service A"
     assert saved.status == HealthStatus.UNKNOWN
     assert saved.last_checked is None
+
+
+async def test_check_type_is_stored(database):
+    await database.add_services([ServiceConfig(name="Web", host="10.0.0.1", port=80, check_type=CheckType.HTTP)])
+
+    assert (await database.get_service("Web")).check_type == CheckType.HTTP
 
 
 async def test_get_service(database):

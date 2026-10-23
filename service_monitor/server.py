@@ -14,7 +14,7 @@ from service_monitor.config import Settings
 from service_monitor.database import Database
 from service_monitor.errors import ServiceMonitorError
 from service_monitor.schemas import Service, ServiceConfig, ServiceStatus
-from service_monitor.service_checker import TcpServiceChecker
+from service_monitor.service_checker import NetworkServiceChecker
 from service_monitor.service_manager import ServiceManager
 
 DEFAULT_HISTORY_LIMIT = 100
@@ -113,7 +113,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         database = Database(settings.database_url)
         await database.create_tables()
-        manager = ServiceManager(database, TcpServiceChecker(settings.check_timeout_seconds))
+        manager = ServiceManager(database, NetworkServiceChecker(settings.check_timeout_seconds))
         app.state.manager = manager
         monitoring = asyncio.create_task(manager.monitor_services(settings.monitor_interval_seconds))
         yield
@@ -124,7 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Service Monitoring API",
-        description="Manage a list of network services and check whether they are reachable over TCP.",
+        description="Manage a list of network services and check whether they are reachable over TCP, HTTP(S) or SSH.",
         lifespan=lifespan,
     )
     app.include_router(router)

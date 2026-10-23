@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from service_monitor.schemas import HealthStatus, Service, ServiceConfig
+from service_monitor.schemas import CheckType, HealthStatus, Service, ServiceConfig
 
 
 def make_config(**overrides):
@@ -75,5 +75,14 @@ def test_new_service_starts_unknown():
 def test_service_serializes_flat_like_the_assignment_example():
     service = Service(name="Service A", host="127.0.0.1", port=8001)
     assert list(service.model_dump()) == [
-        "name", "host", "port", "status", "last_checked", "response_time_ms", "failure_reason",
+        "name", "host", "port", "check_type", "status", "last_checked", "response_time_ms", "failure_reason",
     ]
+
+
+def test_check_type_defaults_to_tcp():
+    assert make_config().check_type == CheckType.TCP
+
+
+def test_rejects_unknown_check_type():
+    with pytest.raises(ValidationError):
+        make_config(check_type="ftp")

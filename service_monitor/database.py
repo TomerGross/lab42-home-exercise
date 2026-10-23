@@ -13,6 +13,7 @@ from service_monitor.errors import DuplicateServiceError, UnknownServiceError
 from service_monitor.schemas import (
     MAX_HOSTNAME_LENGTH,
     MAX_SERVICE_NAME_LENGTH,
+    CheckType,
     FailureReason,
     HealthStatus,
     Service,
@@ -53,6 +54,7 @@ class ServiceRecord(StatusColumns, Base):
     name: Mapped[str] = mapped_column(String(MAX_SERVICE_NAME_LENGTH), unique=True)
     host: Mapped[str] = mapped_column(String(MAX_HOSTNAME_LENGTH))
     port: Mapped[int]
+    check_type: Mapped[CheckType] = mapped_column(default=CheckType.TCP)
 
 
 class CheckRecord(StatusColumns, Base):

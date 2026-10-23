@@ -1,11 +1,12 @@
 [project]
 name = "service-monitor"
 version = "0.1.0"
-description = "REST API that monitors whether configured network services are reachable over TCP."
+description = "REST API that monitors whether configured network services are reachable over TCP, HTTP(S) or SSH."
 requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
     "fastapi>=0.159.1",
+    "httpx2>=2.16.0",
     "pydantic-settings>=2.16.1",
     "sqlalchemy[asyncio]>=2.1.6",
     "uvicorn>=0.54.0",
@@ -13,7 +14,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.16.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]

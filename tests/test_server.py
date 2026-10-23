@@ -39,8 +39,17 @@ def test_list_services_returns_fields_in_assignment_order(client):
 
     assert [service["name"] for service in services] == ["Service A", "Service B"]
     assert list(services[0]) == [
-        "name", "host", "port", "status", "last_checked", "response_time_ms", "failure_reason",
+        "name", "host", "port", "check_type", "status", "last_checked", "response_time_ms", "failure_reason",
     ]
+
+
+def test_add_service_with_check_type(client):
+    service = {"name": "Web", "host": "127.0.0.1", "port": 8080, "check_type": "http"}
+
+    response = client.post("/services", json={"services": [service]})
+
+    assert response.status_code == 201
+    assert response.json()[0]["check_type"] == "http"
 
 
 def test_get_service_with_space_in_name(client):
