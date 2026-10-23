@@ -10,7 +10,7 @@ from service_monitor.service_checker import ServiceChecker
 
 logger = logging.getLogger(__name__)
 
-MAX_CONCURRENT_CHECKS = 100  # caps open sockets, so a long service list cannot exhaust the OS file-descriptor limit
+MAX_CONCURRENT_CHECKS = 100  # max open sockets, so a long service list cannot exhaust the OS file-descriptor limit
 
 
 class ServiceManager:
