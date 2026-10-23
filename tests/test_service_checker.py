@@ -159,14 +159,39 @@ async def test_https_check_uses_tls():
     assert status.status == HealthStatus.DOWN
 
 
-async def test_ssh_banner_is_up():
-    async with fake_server(b"SSH-2.0-OpenSSH_9.6\r\n") as port:
+@pytest.mark.parametrize(
+    "reply",
+    [b"SSH-2.0-OpenSSH_9.6\r\n", b"Welcome\r\nSSH-2.0-OpenSSH_9.6\r\n"],
+    ids=["banner", "lines-before-banner"],
+)
+async def test_ssh_banner_is_up(reply):
+    async with fake_server(reply) as port:
         status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(port, check_type=CheckType.SSH))
 
     assert status.status == HealthStatus.UP
 
 
-@pytest.mark.parametrize("reply", [b"220 smtp.example.com ESMTP\r\n", b""], ids=["other-protocol", "closed"])
+async def test_ssh_banner_arriving_in_pieces_is_up():
+    async def answer_in_two_pieces(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        for piece in (b"SS", b"H-2.0-OpenSSH_9.6\r\n"):
+            writer.write(piece)
+            await writer.drain()
+            await asyncio.sleep(0.05)
+        writer.close()
+
+    server = await asyncio.start_server(answer_in_two_pieces, "127.0.0.1", 0)
+    async with server:
+        port = server.sockets[0].getsockname()[1]
+        status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(port, check_type=CheckType.SSH))
+
+    assert status.status == HealthStatus.UP
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [b"220 smtp.example.com ESMTP\r\n", b"", b"x" * 100_000],
+    ids=["other-protocol", "closed", "endless-line"],
+)
 async def test_ssh_without_banner_is_unexpected_response(reply):
     async with fake_server(reply) as port:
         status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(port, check_type=CheckType.SSH))

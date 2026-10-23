@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 UNREACHABLE_ERRNOS = {errno.ENETUNREACH, errno.EHOSTUNREACH}
 SSH_BANNER_PREFIX = b"SSH-"  # every SSH server greets with "SSH-<version>-..." (RFC 4253 §4.2)
-MAX_SSH_BANNER_LENGTH = 255  # RFC 4253 §4.2
 
 
 class UnexpectedResponseError(Exception):
@@ -70,11 +69,14 @@ async def _check_tcp(service: ServiceConfig) -> None:
 async def _check_ssh(service: ServiceConfig) -> None:
     reader, writer = await asyncio.open_connection(service.host, service.port)
     try:
-        banner = await reader.read(MAX_SSH_BANNER_LENGTH)
+        while line := await reader.readline():  # the server may send other lines before its banner
+            if line.startswith(SSH_BANNER_PREFIX):
+                return
+    except ValueError as error:  # a line longer than the read buffer
+        raise UnexpectedResponseError("SSH reply line too long") from error
     finally:
         writer.close()
-    if not banner.startswith(SSH_BANNER_PREFIX):
-        raise UnexpectedResponseError(f"no SSH banner: {banner!r}")
+    raise UnexpectedResponseError("no SSH banner")
 
 
 async def _check_http(service: ServiceConfig) -> None:
