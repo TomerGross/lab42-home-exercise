@@ -266,7 +266,7 @@ sequenceDiagram
 1. The client sends `POST /services/{name}/check`.
 2. `server.py` calls `ServiceManager.check_service(name)`.
 3. The manager asks the `Database` for the service.
-4. The `Database` returns it. An unknown name raises `UnknownServiceError`, which the server returns as `404`.
+4. The `Database` returns it, or nothing for an unknown name. The manager then raises `UnknownServiceError`, which the server returns as `404`.
 5. The manager passes the service to `NetworkServiceChecker.check`.
 6. The checker connects to `host:port` with the service's check type: TCP, HTTP(S) or SSH.
 7. The monitored service replies, refuses the connection, or stays silent until `CHECK_TIMEOUT_SECONDS` runs out.
@@ -283,7 +283,7 @@ The other endpoints take the same path without the checker: server â†’ manager â
 ## Design decisions
 
 - **FastAPI with async I/O.** A check spends almost all its time waiting on the network. With asyncio, the server keeps answering requests while checks wait, and many checks can wait at the same time.
-- **SQLite through async SQLAlchemy.** SQLite needs no installation and stores everything in one local file. SQLAlchemy keeps the SQL in one module, so moving to PostgreSQL means changing `DATABASE_URL` and installing a driver.
+- **SQLite through async SQLAlchemy.** SQLite needs no installation and stores everything in one local file. SQLAlchemy keeps the SQL in one module, so moving to PostgreSQL should mostly mean changing `DATABASE_URL` and adding a PostgreSQL driver package such as `asyncpg` (not tested).
 - **Current state plus an event log.** The `services` table holds each service's latest status, so listing services stays one fast read. The `checks` table records every check. Both are written in one transaction, so they never disagree.
 - **Shared Pydantic models, separate tables.** The API, the business logic and the checker use the same `schemas.py` types. The database has its own table classes, so storage can change without changing the API.
 - **A duplicate is the same name or the same `host:port`.** Two entries for one `host:port` would probe the same endpoint twice, and one could show UP while the other shows DOWN only because they were checked at different moments. Both rules are unique constraints in the database, so they also hold under concurrent requests.
@@ -306,4 +306,5 @@ The other endpoints take the same path without the checker: server â†’ manager â
 - There are no migrations: tables are created at startup. After a schema change, an older `services.db` must be deleted.
 - A service deleted while its check is running makes that check, or a whole multi-service check, fail with `404` (rarely `500`). A monitoring round that hits this is logged and the next round runs normally.
 - Settings are read from the environment, so a `DATABASE_URL` set for another project in the same shell is picked up.
+- SQLite handles one write at a time, and each check result is one write. Around a thousand services, when many checks finish at once, the last writes in line can exceed SQLite's 5-second wait and fail with `database is locked`: that multi-service check returns `500` (the other results are still stored), or that monitoring round is logged as failed. Saving a round's results together in one transaction, instead of one by one, or moving to PostgreSQL, would fix it.
 - Run a single server process. With `--workers N`, each worker starts its own monitoring loop, so every service is checked N times per round, and the workers compete for SQLite, which allows one writer at a time.

@@ -124,6 +124,16 @@ async def test_http_server_answering_below_500_is_up(reply):
     assert status.response_time_ms >= 0
 
 
+async def test_http_check_ignores_proxy_settings(monkeypatch):
+    monkeypatch.setenv("HTTP_PROXY", f"http://127.0.0.1:{closed_port()}")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+
+    async with fake_server(http_reply("200 OK"), wait_for_request=True) as port:
+        status = await NetworkServiceChecker(TIMEOUT_SECONDS).check(make_config(port, check_type=CheckType.HTTP))
+
+    assert status.status == HealthStatus.UP
+
+
 @pytest.mark.parametrize("reply", [http_reply("503 Service Unavailable"), b"hello\r\n\r\n"], ids=["503", "not-http"])
 async def test_http_server_error_or_non_http_reply_is_unexpected_response(reply):
     async with fake_server(reply, wait_for_request=True) as port:

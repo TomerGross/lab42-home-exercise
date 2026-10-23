@@ -82,7 +82,7 @@ async def _check_ssh(service: ServiceConfig) -> None:
 async def _check_http(service: ServiceConfig) -> None:
     url = httpx2.URL(scheme=service.check_type, host=service.host, port=service.port, path="/")
     async with (
-        httpx2.AsyncClient(timeout=None) as client,  # asyncio.timeout bounds the whole check
+        httpx2.AsyncClient(timeout=None, trust_env=False) as client,
         client.stream("GET", url) as response,  # status and headers only, no body download
     ):
         if response.is_server_error:

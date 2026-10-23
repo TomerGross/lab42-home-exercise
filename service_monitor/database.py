@@ -29,7 +29,7 @@ class Base(DeclarativeBase):
 class UtcDateTime(TypeDecorator):
     """SQLite stores datetimes without a timezone; every timestamp we store is UTC."""
 
-    impl = DateTime
+    impl = DateTime(timezone=True)  # a real timezone column on databases that have one, such as PostgreSQL
     cache_ok = True
 
     def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
