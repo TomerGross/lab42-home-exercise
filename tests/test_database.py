@@ -101,6 +101,49 @@ async def test_update_status_of_unknown_service_raises(database):
         await database.update_status("missing", status)
 
 
+def make_status(health: HealthStatus, minute: int) -> ServiceStatus:
+    return ServiceStatus(status=health, last_checked=datetime(2026, 10, 8, 10, minute, tzinfo=timezone.utc))
+
+
+async def test_update_status_adds_to_history_newest_first(database):
+    await database.add_services([SERVICE_A])
+
+    await database.update_status("Service A", make_status(HealthStatus.DOWN, minute=1))
+    await database.update_status("Service A", make_status(HealthStatus.UP, minute=2))
+    history = await database.get_history("Service A", limit=10)
+
+    assert [status.status for status in history] == [HealthStatus.UP, HealthStatus.DOWN]
+    assert history[0].last_checked == datetime(2026, 10, 8, 10, 2, tzinfo=timezone.utc)
+
+
+async def test_get_history_returns_at_most_limit_entries(database):
+    await database.add_services([SERVICE_A])
+    for minute in range(3):
+        await database.update_status("Service A", make_status(HealthStatus.UP, minute))
+
+    assert len(await database.get_history("Service A", limit=2)) == 2
+
+
+async def test_get_history_of_unchecked_service_is_empty(database):
+    await database.add_services([SERVICE_A])
+
+    assert await database.get_history("Service A", limit=10) == []
+
+
+async def test_get_history_of_unknown_service_is_empty(database):
+    assert await database.get_history("missing", limit=10) == []
+
+
+async def test_deleting_a_service_deletes_its_history(database):
+    await database.add_services([SERVICE_A])
+    await database.update_status("Service A", make_status(HealthStatus.UP, minute=1))
+
+    await database.delete_service("Service A")
+    await database.add_services([SERVICE_B])  # SQLite reuses the deleted row's id for the new service
+
+    assert await database.get_history("Service B", limit=10) == []
+
+
 async def test_delete_service_removes_only_that_service(database):
     await database.add_services([SERVICE_A, SERVICE_B])
 

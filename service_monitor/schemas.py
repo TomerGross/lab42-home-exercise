@@ -54,7 +54,9 @@ class ServiceConfig(BaseModel):
 
 
 class ServiceStatus(BaseModel):
-    """Result of the latest health check."""
+    """Result of one health check."""
+
+    model_config = ConfigDict(from_attributes=True)  # can be built from a database row
 
     status: HealthStatus = HealthStatus.UNKNOWN
     last_checked: datetime | None = None

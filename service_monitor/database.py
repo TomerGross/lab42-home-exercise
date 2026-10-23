@@ -1,11 +1,13 @@
-"""Persistence: the services table and the Database that reads and writes it. The only module that knows SQL."""
+"""Persistence: the services and checks tables and the Database that reads and writes them. The only module that
+knows SQL."""
 
 from datetime import datetime, timezone
 
-from sqlalchemy import String, UniqueConstraint, delete, select
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 
 from service_monitor.errors import DuplicateServiceError, UnknownServiceError
 from service_monitor.schemas import (
@@ -18,13 +20,31 @@ from service_monitor.schemas import (
     ServiceStatus,
 )
 
-
 class Base(DeclarativeBase):
     pass
 
 
-class ServiceRecord(Base):
-    """One monitored service as stored in the database."""
+class UtcDateTime(TypeDecorator):
+    """SQLite stores datetimes without a timezone; every timestamp we store is UTC."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
+        return value.replace(tzinfo=timezone.utc) if value else None
+
+
+class StatusColumns:
+    """The ServiceStatus fields as columns, shared by both tables."""
+
+    status: Mapped[HealthStatus] = mapped_column(default=HealthStatus.UNKNOWN)
+    last_checked: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    response_time_ms: Mapped[float | None]
+    failure_reason: Mapped[FailureReason | None]
+
+
+class ServiceRecord(StatusColumns, Base):
+    """One monitored service and its latest status, as stored in the database."""
 
     __tablename__ = "services"
     __table_args__ = (UniqueConstraint("host", "port"),)
@@ -33,10 +53,15 @@ class ServiceRecord(Base):
     name: Mapped[str] = mapped_column(String(MAX_SERVICE_NAME_LENGTH), unique=True)
     host: Mapped[str] = mapped_column(String(MAX_HOSTNAME_LENGTH))
     port: Mapped[int]
-    status: Mapped[HealthStatus] = mapped_column(default=HealthStatus.UNKNOWN)
-    last_checked: Mapped[datetime | None]
-    response_time_ms: Mapped[float | None]
-    failure_reason: Mapped[FailureReason | None]
+
+
+class CheckRecord(StatusColumns, Base):
+    """One past check of a service, as stored in the database."""
+
+    __tablename__ = "checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), index=True)
 
 
 class Database:
@@ -59,7 +84,7 @@ class Database:
                 session.add_all(records)
         except IntegrityError as error:
             raise DuplicateServiceError("a service with this name or host:port already exists") from error
-        return [_to_service(record) for record in records]
+        return [Service.model_validate(record) for record in records]
 
     async def list_services(self, names: list[str] | None = None) -> list[Service]:
         """All services, or only those with the given names. Names are bound parameters, never SQL text."""
@@ -68,33 +93,42 @@ class Database:
             query = query.where(ServiceRecord.name.in_(names))
         async with self._session_factory() as session:
             records = await session.scalars(query)
-            return [_to_service(record) for record in records]
+            return [Service.model_validate(record) for record in records]
 
     async def get_service(self, name: str) -> Service | None:
         async with self._session_factory() as session:
             record = await session.scalar(select(ServiceRecord).where(ServiceRecord.name == name))
-            return _to_service(record) if record else None
+            return Service.model_validate(record) if record else None
 
     async def update_status(self, name: str, status: ServiceStatus) -> Service:
-        """Store the result of a check as the service's latest status."""
+        """Store the result of a check as the service's latest status, and add it to the history."""
         async with self._session_factory.begin() as session:
             record = await session.scalar(select(ServiceRecord).where(ServiceRecord.name == name))
             if record is None:
                 raise UnknownServiceError(name)
             for field, value in status.model_dump().items():
                 setattr(record, field, value)
-        return _to_service(record)
+            session.add(CheckRecord(service_id=record.id, **status.model_dump()))
+        return Service.model_validate(record)
+
+    async def get_history(self, name: str, limit: int) -> list[ServiceStatus]:
+        """The service's past checks, newest first."""
+        query = (
+            select(CheckRecord)
+            .join(ServiceRecord)
+            .where(ServiceRecord.name == name)
+            .order_by(CheckRecord.id.desc())
+            .limit(limit)
+        )
+        async with self._session_factory() as session:
+            records = await session.scalars(query)
+            return [ServiceStatus.model_validate(record) for record in records]
 
     async def delete_service(self, name: str) -> None:
+        """Delete the service and its history in one transaction."""
         async with self._session_factory.begin() as session:
-            result = await session.execute(delete(ServiceRecord).where(ServiceRecord.name == name))
-            if result.rowcount == 0:
+            service_id = await session.scalar(select(ServiceRecord.id).where(ServiceRecord.name == name))
+            if service_id is None:
                 raise UnknownServiceError(name)
-
-
-def _to_service(record: ServiceRecord) -> Service:
-    service = Service.model_validate(record, from_attributes=True)
-    if service.last_checked is not None:
-        # SQLite drops timezone info; every timestamp we store is UTC.
-        service.last_checked = service.last_checked.replace(tzinfo=timezone.utc)
-    return service
+            await session.execute(delete(CheckRecord).where(CheckRecord.service_id == service_id))
+            await session.execute(delete(ServiceRecord).where(ServiceRecord.id == service_id))

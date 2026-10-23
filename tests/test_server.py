@@ -54,7 +54,12 @@ def test_get_service_with_space_in_name(client):
 
 @pytest.mark.parametrize(
     ("method", "path"),
-    [("get", "/services/missing"), ("post", "/services/missing/check"), ("delete", "/services/missing")],
+    [
+        ("get", "/services/missing"),
+        ("post", "/services/missing/check"),
+        ("delete", "/services/missing"),
+        ("get", "/services/missing/history"),
+    ],
 )
 def test_unknown_service_returns_404(client, method, path):
     response = client.request(method, path)
@@ -162,6 +167,30 @@ def test_check_services_with_empty_names_returns_422(client):
 
     assert response.status_code == 422
     assert response.json()["error"] == "invalid_request"
+
+
+def test_history_lists_checks_newest_first(client):
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        add_service(client, "Flaky", listener.getsockname()[1])
+        client.post("/services/Flaky/check")
+    client.post("/services/Flaky/check")  # the listener is closed now
+
+    response = client.get("/services/Flaky/history")
+
+    assert response.status_code == 200
+    assert [entry["status"] for entry in response.json()] == ["DOWN", "UP"]
+
+
+@pytest.mark.parametrize("limit", [0, 1001])
+def test_history_limit_out_of_range_returns_422(client, limit):
+    client.post("/services", json=PAYLOAD)
+
+    response = client.get(f"/services/Service%20A/history?limit={limit}")
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["field"] == "limit"
 
 
 def test_check_unreachable_service_is_down_but_returns_200(client):

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager, suppress
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, FastAPI, Request
+from fastapi import APIRouter, Body, Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
@@ -13,9 +13,12 @@ from starlette.exceptions import HTTPException
 from service_monitor.config import Settings
 from service_monitor.database import Database
 from service_monitor.errors import ServiceMonitorError
-from service_monitor.schemas import Service, ServiceConfig
+from service_monitor.schemas import Service, ServiceConfig, ServiceStatus
 from service_monitor.service_checker import TcpServiceChecker
 from service_monitor.service_manager import ServiceManager
+
+DEFAULT_HISTORY_LIMIT = 100
+MAX_HISTORY_LIMIT = 1000  # one request can never return an unbounded number of rows
 
 
 def get_manager(request: Request) -> ServiceManager:
@@ -56,6 +59,13 @@ async def check_services(
 @router.post("/services/{name}/check")
 async def check_service(name: str, manager: Manager) -> Service:
     return await manager.check_service(name)
+
+
+@router.get("/services/{name}/history")
+async def get_history(
+    name: str, manager: Manager, limit: Annotated[int, Query(ge=1, le=MAX_HISTORY_LIMIT)] = DEFAULT_HISTORY_LIMIT
+) -> list[ServiceStatus]:
+    return await manager.get_history(name, limit)
 
 
 @router.delete("/services/{name}", status_code=HTTPStatus.NO_CONTENT)

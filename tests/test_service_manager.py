@@ -93,6 +93,20 @@ async def test_check_service_stores_and_returns_the_new_status(manager, checker)
     assert (await manager.get_service("Service A")).status == HealthStatus.UP
 
 
+async def test_each_check_is_added_to_history(manager):
+    await manager.add_services([SERVICE_A])
+
+    await manager.check_service("Service A")
+    await manager.check_services(["Service A"])
+
+    assert len(await manager.get_history("Service A", limit=10)) == 2
+
+
+async def test_get_history_of_unknown_service_raises(manager):
+    with pytest.raises(UnknownServiceError):
+        await manager.get_history("missing", limit=10)
+
+
 async def test_check_unknown_service_raises_without_probing(manager, checker):
     with pytest.raises(UnknownServiceError):
         await manager.check_service("missing")
