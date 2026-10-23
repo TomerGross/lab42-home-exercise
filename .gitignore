@@ -38,5 +38,6 @@ Thumbs.db
 # Private design/planning notes (not part of the submission)
 docs/superpowers/
 
-# Personal testing scripts
+# Personal testing scripts and their output
 scripts/
+my_services.json
