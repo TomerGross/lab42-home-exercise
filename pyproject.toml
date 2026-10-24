@@ -24,6 +24,9 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
+[tool.coverage.report]
+exclude_also = ["case _:\\s+assert_never\\("]  # reachable only if a CheckType has no case
+
 [tool.ruff]
 line-length = 120
 

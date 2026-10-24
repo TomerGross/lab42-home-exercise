@@ -4,11 +4,11 @@ Storing, reading and updating services, duplicates, history, deletes, and data
 surviving a restart.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from service_monitor.database import Database
+from service_monitor.database import Database, UtcDateTime
 from service_monitor.errors import DuplicateServiceError, UnknownServiceError
 from service_monitor.schemas import CheckType, FailureReason, HealthStatus, ServiceConfig, ServiceStatus
 from tests.helpers import sqlite_url
@@ -102,6 +102,15 @@ async def test_update_status_round_trips_in_utc(database):
     assert stored.failure_reason == FailureReason.TIMEOUT
     assert stored.last_checked == checked_at
     assert stored.last_checked.tzinfo is not None
+
+
+def test_timezone_aware_timestamp_is_converted_to_utc():
+    two_hours_ahead = timezone(timedelta(hours=2))
+
+    read = UtcDateTime().process_result_value(datetime(2026, 10, 8, 12, 30, tzinfo=two_hours_ahead), dialect=None)
+
+    assert read == datetime(2026, 10, 8, 10, 30, tzinfo=UTC)
+    assert read.tzinfo == UTC
 
 
 async def test_update_status_of_unknown_service_raises(database):
