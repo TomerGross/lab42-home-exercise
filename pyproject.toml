@@ -2,7 +2,7 @@
 name = "service-monitor"
 version = "0.1.0"
 description = "REST API that monitors whether configured network services are reachable over TCP, HTTP(S) or SSH."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "aiosqlite>=0.22.1",
     "fastapi>=0.159.1",

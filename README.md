@@ -7,7 +7,7 @@ A background task re-checks every service periodically, and all checks run concu
 
 ## Setup
 
-Requirements: [uv](https://docs.astral.sh/uv/getting-started/installation/). It installs a matching Python (3.11+) by itself if needed.
+Requirements: Python 3.12+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
 git clone https://github.com/TomerGross/lab42-home-exercise.git
