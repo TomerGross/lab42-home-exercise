@@ -11,6 +11,7 @@ import socket
 import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
+from typing import assert_never
 
 import httpx2
 
@@ -27,7 +28,7 @@ class UnexpectedResponseError(Exception):
 
 
 class ServiceChecker(ABC):
-    """The contract the business logic depends on, so tests can pass a fake checker."""
+    """Checks a service and returns its status: the interface the business logic depends on."""
 
     @abstractmethod
     async def check(self, service: ServiceConfig) -> ServiceStatus:
@@ -43,7 +44,7 @@ class NetworkServiceChecker(ServiceChecker):
     """
 
     def __init__(self, timeout_seconds: float):
-        self.timeout_seconds = timeout_seconds
+        self._timeout_seconds = timeout_seconds
 
     async def check(self, service: ServiceConfig) -> ServiceStatus:
         """Run the check that matches the service's check type and return UP or DOWN.
@@ -54,7 +55,7 @@ class NetworkServiceChecker(ServiceChecker):
         checked_at = datetime.now(UTC).replace(microsecond=0)
         start = time.perf_counter()
         try:
-            async with asyncio.timeout(self.timeout_seconds):
+            async with asyncio.timeout(self._timeout_seconds):
                 match service.check_type:
                     case CheckType.TCP:
                         await _check_tcp(service)
@@ -62,6 +63,8 @@ class NetworkServiceChecker(ServiceChecker):
                         await _check_ssh(service)
                     case CheckType.HTTP | CheckType.HTTPS:
                         await _check_http(service)
+                    case _:
+                        assert_never(service.check_type)
         except (OSError, httpx2.TransportError, UnexpectedResponseError) as error:
             logger.info("Check of %s failed: %r", service.name, error)
             return ServiceStatus(

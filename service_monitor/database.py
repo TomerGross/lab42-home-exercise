@@ -8,6 +8,7 @@ knows SQL.
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, delete, select
+from sqlalchemy.engine import Dialect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -34,15 +35,18 @@ class UtcDateTime(TypeDecorator):
     """A timestamp column that is always read back as UTC.
 
     SQLite stores datetimes without a timezone, so they come back naive. Every
-    timestamp we store is UTC, so it is marked as UTC when read.
+    timestamp we store is UTC, so it is marked as UTC when read. Databases with
+    a timezone column return aware values, which are converted to UTC.
     """
 
     impl = DateTime(timezone=True)  # a real timezone column on databases that have one, such as PostgreSQL
     cache_ok = True
 
-    def process_result_value(self, value: datetime | None, dialect) -> datetime | None:
-        """Mark a timestamp read from the database as UTC."""
-        return value.replace(tzinfo=UTC) if value else None
+    def process_result_value(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        """Return a timestamp read from the database in UTC."""
+        if value is None:
+            return None
+        return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 class StatusColumns:

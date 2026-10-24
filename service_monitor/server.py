@@ -5,6 +5,7 @@ description on the /docs page.
 """
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from http import HTTPStatus
 from typing import Annotated
@@ -111,7 +112,7 @@ async def handle_unexpected_error(request: Request, error: Exception) -> JSONRes
     return error_response(HTTPStatus.INTERNAL_SERVER_ERROR, "internal_error", "Internal server error")
 
 
-def error_response(status_code: HTTPStatus, code: str, detail: str | list) -> JSONResponse:
+def error_response(status_code: HTTPStatus, code: str, detail: str | list[dict[str, str]]) -> JSONResponse:
     """Build the one error shape: {"error": code, "detail": a message or a list of problems}."""
     return JSONResponse(status_code=status_code, content={"error": code, "detail": detail})
 
@@ -121,21 +122,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        """Open the database and start monitoring before serving requests; stop both on shutdown.
-
-        The code before `yield` runs at startup, the code after it at shutdown.
-        """
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        """Open the database and start monitoring before serving requests; stop both on shutdown."""
         database = Database(settings.database_url)
         await database.create_tables()
         manager = ServiceManager(database, NetworkServiceChecker(settings.check_timeout_seconds))
         app.state.manager = manager
         monitoring = asyncio.create_task(manager.monitor_services(settings.monitor_interval_seconds))
-        yield
-        monitoring.cancel()
-        with suppress(asyncio.CancelledError):  # a cancelled task ends by raising this
-            await monitoring
-        await database.close()
+        try:
+            yield
+        finally:
+            monitoring.cancel()
+            with suppress(asyncio.CancelledError):  # a cancelled task ends by raising this
+                await monitoring
+            await database.close()
 
     app = FastAPI(
         title="Service Monitoring API",

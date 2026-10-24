@@ -29,7 +29,7 @@ def http_reply(status: str, headers: str = "") -> bytes:
 
 
 @asynccontextmanager
-async def fake_server(reply: bytes | None, wait_for_request: bool = False):
+async def fake_server(reply: bytes | None, *, wait_for_request: bool = False):
     """Run a local server that answers every client with `reply`, or stays silent when `reply` is None.
 
     Yields the server's port. With `wait_for_request`, it first reads the client's HTTP request.

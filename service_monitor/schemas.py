@@ -17,7 +17,7 @@ MAX_HOSTNAME_LABEL_LENGTH = 63  # DNS limit for each dot-separated label (RFC 10
 MAX_PORT = 65535  # TCP ports are 16-bit numbers
 
 # Letters, digits and hyphens, not starting or ending with a hyphen (RFC 1123).
-HOSTNAME_LABEL = re.compile(rf"(?!-)[a-z0-9-]{{1,{MAX_HOSTNAME_LABEL_LENGTH}}}(?<!-)")
+HOSTNAME_LABEL_PATTERN = re.compile(rf"(?!-)[a-z0-9-]{{1,{MAX_HOSTNAME_LABEL_LENGTH}}}(?<!-)")
 
 
 class HealthStatus(StrEnum):
@@ -74,7 +74,7 @@ class ServiceConfig(BaseModel):
         except ValueError:
             pass
         labels = host.split(".")
-        if all(HOSTNAME_LABEL.fullmatch(label) for label in labels) and not labels[-1].isdigit():
+        if all(HOSTNAME_LABEL_PATTERN.fullmatch(label) for label in labels) and not labels[-1].isdigit():
             return host
         raise ValueError("must be a valid IP address or hostname")
 

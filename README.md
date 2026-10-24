@@ -109,7 +109,7 @@ curl -X POST "http://127.0.0.1:8000/services/Service%20A/check"
 ```
 
 Runs a check now, stores the result as the service's latest status and in its history, and returns `200 OK` with the updated service.
-A service that is DOWN is still a successful check, so it also returns `200`. The reason  is in `failure_reason`:
+A service that is DOWN is still a successful check, so it also returns `200`. The reason is in `failure_reason`:
 
 | `failure_reason` | Meaning |
 |---|---|

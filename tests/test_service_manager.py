@@ -180,10 +180,12 @@ async def test_check_services_runs_checks_concurrently_up_to_the_limit(database)
 async def monitoring(manager: ServiceManager):
     """Run the monitoring loop with a 10 ms interval while the block runs."""
     task = asyncio.create_task(manager.monitor_services(interval_seconds=0.01))
-    yield
-    task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
 
 async def wait_until(condition) -> None:
