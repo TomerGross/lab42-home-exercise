@@ -1,3 +1,9 @@
+"""Tests for service_monitor/database.py, on a real SQLite file.
+
+Storing, reading and updating services, duplicates, history, deletes, and data
+surviving a restart.
+"""
+
 from datetime import UTC, datetime
 
 import pytest
@@ -106,6 +112,7 @@ async def test_update_status_of_unknown_service_raises(database):
 
 
 def make_status(health: HealthStatus, minute: int) -> ServiceStatus:
+    """Return a check result from the given minute, so results can be told apart by time."""
     return ServiceStatus(status=health, last_checked=datetime(2026, 10, 8, 10, minute, tzinfo=UTC))
 
 

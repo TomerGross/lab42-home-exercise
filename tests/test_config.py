@@ -1,3 +1,5 @@
+"""Tests for service_monitor/config.py: defaults, environment overrides and rejected values."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -6,6 +8,7 @@ from service_monitor.config import Settings
 
 @pytest.fixture(autouse=True)
 def clean_environment(monkeypatch):
+    """Remove the settings' environment variables, so values set in the shell cannot leak into a test."""
     for field in Settings.model_fields:
         monkeypatch.delenv(field.upper(), raising=False)
 

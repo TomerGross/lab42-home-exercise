@@ -1,4 +1,8 @@
-"""API layer: the FastAPI app, its endpoints and error responses. The only module that knows the web framework."""
+"""API layer: the FastAPI app, its routes and its error responses.
+
+The only module that knows the web framework. Each route's docstring is its
+description on the /docs page.
+"""
 
 import asyncio
 from contextlib import asynccontextmanager, suppress
@@ -22,6 +26,7 @@ MAX_HISTORY_LIMIT = 1000  # one request can never return an unbounded number of 
 
 
 def get_manager(request: Request) -> ServiceManager:
+    """Return the ServiceManager created at startup. Routes receive it through `Manager`."""
     return request.app.state.manager
 
 
@@ -29,23 +34,23 @@ Manager = Annotated[ServiceManager, Depends(get_manager)]
 router = APIRouter()
 
 
-# --- Routes ---
-
-
 @router.post("/services", status_code=HTTPStatus.CREATED)
 async def add_services(
     services: Annotated[list[ServiceConfig], Body(embed=True, min_length=1)], manager: Manager
 ) -> list[Service]:
+    """Add services, all or none. 409 if a name or host:port already exists, 422 if a service is invalid."""
     return await manager.add_services(services)
 
 
 @router.get("/services")
 async def list_services(manager: Manager) -> list[Service]:
+    """List every service with its latest status, sorted by name."""
     return await manager.list_services()
 
 
 @router.get("/services/{name}")
 async def get_service(name: str, manager: Manager) -> Service:
+    """Return one service with its latest status. 404 for an unknown name."""
     return await manager.get_service(name)
 
 
@@ -53,11 +58,16 @@ async def get_service(name: str, manager: Manager) -> Service:
 async def check_services(
     manager: Manager, names: Annotated[list[str] | None, Body(embed=True, min_length=1)] = None
 ) -> list[Service]:
+    """Check the named services, or every service when there is no body, concurrently.
+
+    Returns each updated service, sorted by name. 404 if any name is unknown; nothing is checked then.
+    """
     return await manager.check_services(names)
 
 
 @router.post("/services/{name}/check")
 async def check_service(name: str, manager: Manager) -> Service:
+    """Check the service now and store the result. 200 even when it is DOWN; 404 for an unknown name."""
     return await manager.check_service(name)
 
 
@@ -65,22 +75,23 @@ async def check_service(name: str, manager: Manager) -> Service:
 async def get_history(
     name: str, manager: Manager, limit: Annotated[int, Query(ge=1, le=MAX_HISTORY_LIMIT)] = DEFAULT_HISTORY_LIMIT
 ) -> list[ServiceStatus]:
+    """Return the service's past checks, newest first. 404 for an unknown name."""
     return await manager.get_history(name, limit)
 
 
 @router.delete("/services/{name}", status_code=HTTPStatus.NO_CONTENT)
 async def delete_service(name: str, manager: Manager) -> None:
+    """Delete the service and its history. 404 for an unknown name."""
     await manager.delete_service(name)
 
 
-# --- Error handlers: every error becomes {"error": <code>, "detail": <message or list>} ---
-
-
 async def handle_service_monitor_error(request: Request, error: ServiceMonitorError) -> JSONResponse:
+    """Report a domain error with the status and code it declares."""
     return error_response(error.status_code, error.code, str(error))
 
 
 async def handle_invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
+    """Report invalid input as 422, listing each problem as {"field", "message"}."""
     # loc looks like ("body", "services", 0, "port") or ("query", "limit"); drop the location to get "services.0.port".
     problems = [
         {"field": ".".join(str(part) for part in problem["loc"][1:]), "message": problem["msg"]}
@@ -90,27 +101,31 @@ async def handle_invalid_request(request: Request, error: RequestValidationError
 
 
 async def handle_http_error(request: Request, error: HTTPException) -> JSONResponse:
+    """Report the framework's own errors, such as an unknown URL (404) or method (405), in the same shape."""
     status_code = HTTPStatus(error.status_code)
     return error_response(status_code, status_code.phrase.lower().replace(" ", "_"), error.detail)
 
 
 async def handle_unexpected_error(request: Request, error: Exception) -> JSONResponse:
-    # The traceback is still logged by the server; the client never sees internal details.
+    """Report any other error as 500 without internal details. The server still logs the traceback."""
     return error_response(HTTPStatus.INTERNAL_SERVER_ERROR, "internal_error", "Internal server error")
 
 
 def error_response(status_code: HTTPStatus, code: str, detail: str | list) -> JSONResponse:
+    """Build the one error shape: {"error": code, "detail": a message or a list of problems}."""
     return JSONResponse(status_code=status_code, content={"error": code, "detail": detail})
 
 
-# --- App ---
-
-
 def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create the app. Tests pass their own settings; the server reads them from the environment."""
     settings = settings or Settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        """Open the database and start monitoring before serving requests; stop both on shutdown.
+
+        The code before `yield` runs at startup, the code after it at shutdown.
+        """
         database = Database(settings.database_url)
         await database.create_tables()
         manager = ServiceManager(database, NetworkServiceChecker(settings.check_timeout_seconds))

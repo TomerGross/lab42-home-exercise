@@ -1,3 +1,8 @@
+"""Tests for service_monitor/service_manager.py, with fake checkers instead of the network.
+
+The operations, the concurrency limit and the background monitoring loop.
+"""
+
 import asyncio
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
@@ -31,11 +36,13 @@ class FakeChecker(ServiceChecker):
 
 @pytest.fixture
 def checker():
+    """Return a FakeChecker the test can inspect."""
     return FakeChecker()
 
 
 @pytest.fixture
 def manager(database, checker):
+    """Return a ServiceManager on a fresh database and the fake checker."""
     return ServiceManager(database, checker)
 
 
@@ -171,6 +178,7 @@ async def test_check_services_runs_checks_concurrently_up_to_the_limit(database)
 
 @asynccontextmanager
 async def monitoring(manager: ServiceManager):
+    """Run the monitoring loop with a 10 ms interval while the block runs."""
     task = asyncio.create_task(manager.monitor_services(interval_seconds=0.01))
     yield
     task.cancel()
@@ -179,6 +187,7 @@ async def monitoring(manager: ServiceManager):
 
 
 async def wait_until(condition) -> None:
+    """Wait until `condition()` is true. Fails the test after one second."""
     async with asyncio.timeout(1):
         while not condition():
             await asyncio.sleep(0.01)

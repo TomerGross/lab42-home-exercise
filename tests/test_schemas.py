@@ -1,3 +1,5 @@
+"""Tests for service_monitor/schemas.py: what a client may send as a service."""
+
 import pytest
 from pydantic import ValidationError
 
@@ -5,6 +7,7 @@ from service_monitor.schemas import CheckType, HealthStatus, Service, ServiceCon
 
 
 def make_config(**overrides):
+    """Return a valid ServiceConfig with `overrides` applied."""
     data = {"name": "Service A", "host": "127.0.0.1", "port": 8001} | overrides
     return ServiceConfig(**data)
 

@@ -1,3 +1,9 @@
+"""Tests for service_monitor/service_checker.py: each check type against real local servers.
+
+Timeouts and the rarer network errors cannot be produced reliably on localhost,
+so those tests replace asyncio.open_connection with one that hangs or fails.
+"""
+
 import asyncio
 import errno
 import socket
@@ -13,16 +19,21 @@ TIMEOUT_SECONDS = 1.0
 
 
 def make_config(port: int, host: str = "127.0.0.1", check_type: CheckType = CheckType.TCP) -> ServiceConfig:
+    """Return a service on `host:port` with the given check type."""
     return ServiceConfig(name="Service A", host=host, port=port, check_type=check_type)
 
 
 def http_reply(status: str, headers: str = "") -> bytes:
+    """Return a minimal HTTP response with the given status line and extra headers."""
     return f"HTTP/1.1 {status}\r\n{headers}Content-Length: 0\r\n\r\n".encode()
 
 
 @asynccontextmanager
 async def fake_server(reply: bytes | None, wait_for_request: bool = False):
-    """A local server that answers every client with `reply`, or stays silent when reply is None."""
+    """Run a local server that answers every client with `reply`, or stays silent when `reply` is None.
+
+    Yields the server's port. With `wait_for_request`, it first reads the client's HTTP request.
+    """
 
     async def answer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         if wait_for_request:

@@ -1,3 +1,5 @@
+"""Helpers for tests that need a database file or real localhost ports."""
+
 import socket
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -5,6 +7,7 @@ from pathlib import Path
 
 
 def sqlite_url(path: Path) -> str:
+    """Return the database URL of an SQLite file at `path`."""
     return f"sqlite+aiosqlite:///{path.as_posix()}"
 
 

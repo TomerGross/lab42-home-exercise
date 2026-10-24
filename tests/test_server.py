@@ -1,3 +1,9 @@
+"""Tests for service_monitor/server.py: the API end to end, through FastAPI's TestClient.
+
+Status codes, error bodies, background monitoring and persistence across an app
+restart. Checks run against real localhost ports.
+"""
+
 import time
 
 import pytest
@@ -14,12 +20,14 @@ PAYLOAD = {"services": [SERVICE_A, SERVICE_B]}
 
 @pytest.fixture
 def client(tmp_path):
+    """Return a client of a running app on a fresh database, with a short check timeout."""
     app = create_app(Settings(database_url=sqlite_url(tmp_path / "api.db"), check_timeout_seconds=0.5))
     with TestClient(app) as client:
         yield client
 
 
 def add_service(client, name: str, port: int):
+    """Add one service on 127.0.0.1 through the API."""
     client.post("/services", json={"services": [{"name": name, "host": "127.0.0.1", "port": port}]})
 
 
